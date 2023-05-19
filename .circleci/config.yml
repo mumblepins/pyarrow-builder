@@ -1,0 +1,210 @@
+# Use the latest 2.1 version of CircleCI pipeline process engine.
+# See: https://circleci.com/docs/configuration-reference
+version: 2.1
+orbs:
+  gh: circleci/github-cli@2.2.0
+
+executors:
+  arm64:
+    machine:
+      image: ubuntu-2204:current
+      docker_layer_caching: false
+    resource_class: arm.medium
+    environment:
+      ARCH: arm64
+  amd64:
+    machine:
+      image: ubuntu-2204:current
+      docker_layer_caching: false
+    resource_class: medium
+    environment:
+      ARCH: amd64
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/configuration-reference/#jobs
+jobs:
+  build:
+    # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
+    # See: https://circleci.com/docs/configuration-reference/#executor-job
+    parameters:
+      python_version:
+        type: string
+      arrow_version:
+        type: string
+      e:
+        type: executor
+      arch:
+        type: string
+    executor: << parameters.e >>
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: Skip Job if Done
+          command: |
+            if [[ $(< /tmp/workspace/<<parameters.arrow_version>>-py<<parameters.python_version>>.status ) == "0" ]]; then
+                echo "Stopping Job because release exists"
+                circleci-agent step halt
+            fi
+      - checkout
+      - restore_cache:
+          keys:
+            - distcache-<< parameters.arch >>-<< parameters.arrow_version >>-<< parameters.python_version >>
+            - distcache-<< parameters.arch >>-<< parameters.arrow_version >>
+            - distcache-<< parameters.arch >>
+            - distcache
+            - arrow-<< parameters.arch >>-<< parameters.arrow_version >>-<< parameters.python_version >>-v2
+            - arrow-<< parameters.arch >>
+      - restore_cache:
+          keys:
+            - ccache-<< parameters.arch >>-<< parameters.arrow_version >>
+            - ccache-<< parameters.arch >>
+            - ccache
+      - run:
+          name: "Build"
+          command: >
+            docker run --rm
+            -v "${PWD}:/build"
+            --workdir /build
+            ghcr.io/mumblepins/pyarrow-builder:<< parameters.python_version >>-$ARCH
+            ./builder.sh << parameters.arrow_version >> << parameters.python_version >>
+      - save_cache:
+          key: distcache-<< parameters.arch >>-<< parameters.arrow_version >>-<< parameters.python_version >>
+          paths:
+            - dist
+      - save_cache:
+          key: ccache-<< parameters.arch >>-<< parameters.arrow_version >>
+          paths:
+            - .ccache
+            - .cached_build
+      - run:
+          name: Copy Artifacts
+          command: |
+            mkdir -p artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>
+            cp dist/*.zip artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>/
+      #      - store_artifacts:
+      #          path: artifacts
+      - persist_to_workspace:
+          root: artifacts
+          paths:
+            - "<< parameters.arrow_version >>/<<parameters.python_version>>/*.zip"
+  create_release:
+    docker:
+      - image: cimg/base:stable
+    parameters:
+      python_version:
+        type: string
+      arrow_version:
+        type: string
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: Skip Job if Done
+          command: |
+            if [[ $(< /tmp/workspace/<<parameters.arrow_version>>-py<<parameters.python_version>>.status ) == "0" ]]; then
+                echo "Stopping Job because release exists"
+                circleci-agent step halt
+            fi
+      - gh/install
+      - gh/clone
+      - attach_workspace:
+          at: /tmp/artifacts
+      - run:
+          command: >
+            set -x ; 
+            gh release create <<parameters.arrow_version>>-py<<parameters.python_version>>
+            --notes ""
+            --repo "$(git config --get remote.origin.url)"
+            /tmp/artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>/*.zip
+  check_release:
+    docker:
+      - image: cimg/base:stable
+    parameters:
+      python_version:
+        type: string
+      arrow_version:
+        type: string
+    steps:
+      - gh/install
+      - gh/clone
+      - run:
+          command: >
+            set -x; 
+            mkdir -p workspace;
+            (gh release view
+            <<parameters.arrow_version>>-py<<parameters.python_version>>
+            --json assets
+            --jq '.assets[].name' 
+            | grep <<parameters.arrow_version>>-py<<parameters.python_version>> -q ) &&
+            (echo 0 | tee workspace/<<parameters.arrow_version>>-py<<parameters.python_version>>.status) ||
+            (echo 1 | tee workspace/<<parameters.arrow_version>>-py<<parameters.python_version>>.status)
+
+      - persist_to_workspace:
+          root: workspace
+          paths: "*.status"
+
+
+
+
+# Orchestrate jobs using workflows
+# See: https://circleci.com/docs/configuration-reference/#workflows
+workflows:
+  build-workflow:
+    jobs:
+      - check_release:
+          name: check-release-py<<matrix.python_version>>-<<matrix.arrow_version>>
+          filters:
+            branches:
+              only:
+                - main
+          matrix:
+            parameters:
+              python_version: &python-versions
+                - "3.8"
+                - "3.9"
+                - "3.10"
+              arrow_version: &arrow-versions
+                - "7.0.0"
+                - "7.0.1"
+                - "9.0.0"
+                - "10.0.1"
+                - "11.0.0"
+                - "12.0.0"
+
+
+      - build:
+          requires:
+            - check-release-py<<matrix.python_version>>-<<matrix.arrow_version>>
+          name: build-arm-py<<matrix.python_version>>-<<matrix.arrow_version>>
+          e: arm64
+          arch: arm64
+          matrix:
+            alias: build-arm
+            parameters:
+              python_version: *python-versions
+              arrow_version: *arrow-versions
+      - build:
+          requires:
+            - check-release-py<<matrix.python_version>>-<<matrix.arrow_version>>
+          name: build-amd-py<<matrix.python_version>>-<<matrix.arrow_version>>
+          e: amd64
+          arch: amd64
+          matrix:
+            alias: build-amd
+            parameters:
+              python_version: *python-versions
+              arrow_version: *arrow-versions
+
+      - create_release:
+          name: create-release-py<<matrix.python_version>>-<<matrix.arrow_version>>
+          filters:
+            branches:
+              only:
+                - main
+          matrix:
+            parameters:
+              python_version: *python-versions
+              arrow_version: *arrow-versions
+          requires:
+            - build-amd-py<<matrix.python_version>>-<<matrix.arrow_version>>
+            - build-arm-py<<matrix.python_version>>-<<matrix.arrow_version>>
