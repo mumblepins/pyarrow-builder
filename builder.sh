@@ -2,7 +2,7 @@
 set -ex
 ARROW_VERSION="$1"
 PYTHON_VERSION="$2"
-FILENAME="pyarrow-$ARROW_VERSION-py${PYTHON_VERSION}-$(uname -m).zip"
+FILENAME="pyarrow-$ARROW_VERSION-py${PYTHON_VERSION}-$(uname -m).tar.gz"
 NINJA=ninja-build
 VERSION=$ARROW_VERSION
 base_dir="$PWD"
@@ -103,7 +103,9 @@ find python -name '*.a' -type f -delete
 find python -wholename "*/tests/*" -type f -delete
 find python -regex '^.*\(__pycache__\|\.py[co]\)$' -delete
 
-zip -r9 "${FILENAME}" ./python
+
+tar czvf "${FILENAME}" python
+#zip -r9 "${FILENAME}" python
 mv "${FILENAME}" dist/
 
 #rm -rf python dist/pyarrow_files "${FILENAME}"

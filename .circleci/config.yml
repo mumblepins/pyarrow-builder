@@ -80,13 +80,13 @@ jobs:
           name: Copy Artifacts
           command: |
             mkdir -p artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>
-            cp dist/*.zip artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>/
+            cp dist/*.tar.gz artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>/
       #      - store_artifacts:
       #          path: artifacts
       - persist_to_workspace:
           root: artifacts
           paths:
-            - "<< parameters.arrow_version >>/<<parameters.python_version>>/*.zip"
+            - "<< parameters.arrow_version >>/<<parameters.python_version>>/*.tar.gz"
   create_release:
     docker:
       - image: cimg/base:stable
@@ -115,7 +115,7 @@ jobs:
             gh release create <<parameters.arrow_version>>-py<<parameters.python_version>>
             --notes ""
             --repo "$(git config --get remote.origin.url)"
-            /tmp/artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>/*.zip
+            /tmp/artifacts/<< parameters.arrow_version >>/<<parameters.python_version>>/*.tar.gz
   check_release:
     docker:
       - image: cimg/base:stable
