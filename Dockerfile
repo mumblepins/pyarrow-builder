@@ -24,7 +24,7 @@ RUN yum install -y amazon-linux-extras \
 WORKDIR /root
 
 RUN pip3 install --no-cache-dir --upgrade pip wheel \
-  && pip3 install --no-cache-dir --upgrade six cython cmake hypothesis poetry
+  && pip3 install --no-cache-dir --upgrade six "cython<3.0" cmake hypothesis poetry
 
 
 ADD https://raw.githubusercontent.com/aws/aws-sdk-pandas/main/pyproject.toml ./

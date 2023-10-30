@@ -91,7 +91,7 @@ rm -rf python/boto*
 
 rm -f "$base_dir"/dist/pyarrow_files/pyarrow/libarrow.so
 rm -f "$base_dir"/dist/pyarrow_files/pyarrow/libparquet.so
-rm -f "$base_dir"/dist/pyarrow_files/pyarrow/libarrow_python.so
+#rm -f "$base_dir"/dist/pyarrow_files/pyarrow/libarrow_python.so
 
 mkdir -p python
 cp -r "$base_dir"/dist/pyarrow_files/pyarrow* python/
