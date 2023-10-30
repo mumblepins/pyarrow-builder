@@ -16,7 +16,7 @@ jobs:
         platform:
           - amd64
           - arm64
-        python_version: [ "3.8", "3.9","3.10" ]
+        python_version: [ "3.9","3.10" ,"3.11" ]
     runs-on: ubuntu-latest
     permissions:
       contents: read
