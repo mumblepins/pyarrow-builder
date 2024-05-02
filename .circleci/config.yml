@@ -161,8 +161,9 @@ workflows:
                 - "11.0.0"
                 - "12.0.0"
                 - "13.0.0"
-
-
+                - "14.0.2"
+                - "15.0.2"
+                - "16.0.0"
       - build:
           requires:
             - check-release-py<<matrix.python_version>>-<<matrix.arrow_version>>
